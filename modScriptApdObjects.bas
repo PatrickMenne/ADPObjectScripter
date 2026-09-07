@@ -13,19 +13,29 @@ Option Compare Database
 ' Server, not the ADP file, and are intentionally NOT covered here.)
 '
 ' EXPORT USAGE:
-'   Call ExportAllScriptableObjects("C:\Export\MyProject\")
+'   Call ExportAllScriptableObjects()                                          ' Default: <ADP-Pfad>\adp_dump\, kein Log
+'   Call ExportAllScriptableObjects("C:\Export\MyProject\")                    ' eigener Pfad, kein Log
+'   Call ExportAllScriptableObjects("C:\Export\MyProject\", WithLogFile:=True) ' eigener Pfad, mit Log
+'   Call ExportAllScriptableObjects WithLogFile:=True                         ' Default-Pfad, mit Log
 '   -- or run the interactive wrapper --
 '   Call RunExportAllScriptableObjects
+'
+' Hinweis: Vor jedem Lauf werden nur die Objekt-Unterordner (Forms, Reports,
+' Macros, Modules) geleert. Sonstiger Inhalt des Zielverzeichnisses
+' (z.B. Logdateien, .git, .svn) bleibt unangetastet.
 '
 ' IMPORT USAGE:
 '   Call ImportScriptableObject(acForm, "C:\Export\Forms\frmCustomer.txt")
 '   Call ImportScriptableObject(acForm, "C:\Export\Forms\frmCustomer.txt", "frmCopy")
 '===============================================================================
 
+Public Const MODULE_VERSION As String = "1.5.20260907"
+
 Private mLogFile As Integer
 Private mLogPath As String
 Private mSuccessCount As Long
 Private mFailCount As Long
+Private mWithLogFile As Boolean
 
 '###############################################################################
 ' EXPORT
@@ -37,13 +47,9 @@ Private mFailCount As Long
 Public Sub RunExportAllScriptableObjects()
 
     Dim sFolder As String
-    sFolder = InputBox("Enter the full path to the export folder:", _
-                        "Export ADP Scriptable Objects", "C:\ADP_Export\")
-
-    If Len(Trim$(sFolder)) = 0 Then
-        MsgBox "Export cancelled.", vbInformation
-        Exit Sub
-    End If
+    sFolder = InputBox("Pfad zum Export-Verzeichnis (leer lassen für Standard: " & _
+                        "<ADP-Pfad>\adp_dump\):", _
+                        "Export ADP Scriptable Objects", "")
 
     ExportAllScriptableObjects sFolder
 
@@ -52,7 +58,8 @@ End Sub
 '--------------------------------------------------------------
 ' Main export routine
 '--------------------------------------------------------------
-Public Sub ExportAllScriptableObjects(ByVal ExportFolder As String)
+Public Sub ExportAllScriptableObjects(Optional ByVal ExportFolder As String = "", _
+                                       Optional ByVal WithLogFile As Boolean = False)
 
     Dim sBase As String
     Dim sFormsDir As String, sReportsDir As String
@@ -62,9 +69,15 @@ Public Sub ExportAllScriptableObjects(ByVal ExportFolder As String)
 
     mSuccessCount = 0
     mFailCount = 0
+    mWithLogFile = WithLogFile
 
-    sBase = ExportFolder
+    If Len(Trim$(ExportFolder)) = 0 Then
+        sBase = CurrentProject.Path & "\adp_dump\"
+    Else
+        sBase = ExportFolder
+    End If
     If Right$(sBase, 1) <> "\" Then sBase = sBase & "\"
+
     EnsureFolder sBase
 
     sFormsDir = sBase & "Forms\"
@@ -72,16 +85,29 @@ Public Sub ExportAllScriptableObjects(ByVal ExportFolder As String)
     sMacrosDir = sBase & "Macros\"
     sModulesDir = sBase & "Modules\"
 
+    ' Vor jedem Lauf nur die jeweiligen Objekt-Unterordner leeren
+    ' (restlicher Inhalt von sBase, z.B. Logdateien, .git, .svn, bleibt unangetastet)
     EnsureFolder sFormsDir
-    EnsureFolder sReportsDir
-    EnsureFolder sMacrosDir
-    EnsureFolder sModulesDir
+    ClearFolderRecursively sFormsDir
 
-    ' Open log file
-    mLogPath = sBase & "ExportLog_" & Format(Now, "yyyymmdd_hhnnss") & ".txt"
-    mLogFile = FreeFile
-    Open mLogPath For Output As #mLogFile
+    EnsureFolder sReportsDir
+    ClearFolderRecursively sReportsDir
+
+    EnsureFolder sMacrosDir
+    ClearFolderRecursively sMacrosDir
+
+    EnsureFolder sModulesDir
+    ClearFolderRecursively sModulesDir
+
+    ' Logdatei nur öffnen, wenn gewünscht
+    If mWithLogFile Then
+        mLogPath = sBase & "ExportLog_" & Format(Now, "yyyymmdd_hhnnss") & ".txt"
+        mLogFile = FreeFile
+        Open mLogPath For Output As #mLogFile
+    End If
+
     LogLine "Export started: " & Now
+    LogLine "Module version: " & MODULE_VERSION
     LogLine "Target folder: " & sBase
     LogLine "----------------------------------------"
 
@@ -93,19 +119,21 @@ Public Sub ExportAllScriptableObjects(ByVal ExportFolder As String)
     LogLine "----------------------------------------"
     LogLine "Export finished: " & Now
     LogLine "Succeeded: " & mSuccessCount & "   Failed: " & mFailCount
-    Close #mLogFile
+
+    If mWithLogFile Then Close #mLogFile
 
     MsgBox "Export complete." & vbCrLf & _
            "Succeeded: " & mSuccessCount & vbCrLf & _
-           "Failed: " & mFailCount & vbCrLf & _
-           "Log: " & mLogPath, vbInformation, "Export ADP Scriptable Objects"
+           "Failed: " & mFailCount & _
+           IIf(mWithLogFile, vbCrLf & "Log: " & mLogPath, ""), _
+           vbInformation, "Export ADP Scriptable Objects"
 
     Exit Sub
 
 ErrHandler:
     On Error Resume Next
     LogLine "FATAL ERROR: " & Err.Number & " - " & Err.Description
-    Close #mLogFile
+    If mWithLogFile Then Close #mLogFile
     MsgBox "Export failed: " & Err.Number & " - " & Err.Description, vbCritical
 End Sub
 
@@ -214,6 +242,55 @@ Private Sub EnsureFolder(ByVal sPath As String)
     End If
 End Sub
 
+'--------------------------------------------------------------
+' Löscht rekursiv alle Dateien und Unterordner in sPath.
+' sPath selbst bleibt bestehen.
+'--------------------------------------------------------------
+Private Sub ClearFolderRecursively(ByVal sPath As String)
+
+    Dim sEntry As String
+    Dim colFiles As Collection
+    Dim colDirs As Collection
+    Dim itm As Variant
+
+    If Right$(sPath, 1) <> "\" Then sPath = sPath & "\"
+    If Len(Dir(sPath, vbDirectory)) = 0 Then Exit Sub ' Ordner existiert nicht
+
+    Set colFiles = New Collection
+    Set colDirs = New Collection
+
+    ' Erst vollständig einlesen (Dir() hat nur einen aktiven Suchzustand,
+    ' rekursive Aufrufe würden die laufende Schleife sonst stören)
+    sEntry = Dir(sPath, vbNormal Or vbHidden Or vbSystem Or vbDirectory)
+    Do While Len(sEntry) > 0
+        If sEntry <> "." And sEntry <> ".." Then
+            If (GetAttr(sPath & sEntry) And vbDirectory) = vbDirectory Then
+                ' .git- und .svn-Ordner (Groß-/Kleinschreibung ignorieren) nie löschen
+                If LCase$(sEntry) <> ".git" And LCase$(sEntry) <> ".svn" Then
+                    colDirs.Add sEntry
+                End If
+            Else
+                colFiles.Add sEntry
+            End If
+        End If
+        sEntry = Dir()
+    Loop
+
+    For Each itm In colFiles
+        On Error Resume Next
+        Kill sPath & itm
+        On Error GoTo 0
+    Next itm
+
+    For Each itm In colDirs
+        ClearFolderRecursively sPath & itm & "\"
+        On Error Resume Next
+        RmDir sPath & itm
+        On Error GoTo 0
+    Next itm
+
+End Sub
+
 Private Function CleanFileName(ByVal sName As String) As String
     Dim sBad As String
     Dim i As Integer
@@ -248,6 +325,6 @@ End Function
 
 Private Sub LogLine(ByVal sText As String)
     On Error Resume Next
-    Print #mLogFile, sText
+    If mWithLogFile Then Print #mLogFile, sText
     Debug.Print sText
 End Sub
