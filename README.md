@@ -11,9 +11,9 @@ files and can import them back into an ADP. Intended for version control
 
 | Object type | Folder       | File extension |
 |-------------|--------------|-----------------|
-| Forms       | `Forms\`     | `.txt`          |
-| Reports     | `Reports\`   | `.txt`          |
-| Macros      | `Macros\`    | `.txt`          |
+| Forms       | `Forms\`     | `.frm`          |
+| Reports     | `Reports\`   | `.rpt`          |
+| Macros      | `Macros\`    | `.mac`          |
 | Modules     | `Modules\`   | `.bas`          |
 
 Export is done via `Application.SaveAsText`.
@@ -85,10 +85,10 @@ Loads a single previously exported file back into the currently open ADP:
 
 ```vba
 ' Object name is derived from the file name -> "frmCustomer"
-ImportScriptableObject acForm, "C:\Export\Forms\frmCustomer.txt"
+ImportScriptableObject acForm, "C:\Export\Forms\frmCustomer.frm"
 
 ' Explicit object name (different from the file name)
-ImportScriptableObject acForm, "C:\Export\Forms\frmCustomer.txt", "frmCustomerCopy"
+ImportScriptableObject acForm, "C:\Export\Forms\frmCustomer.frm", "frmCustomerCopy"
 ```
 
 **Parameters:**

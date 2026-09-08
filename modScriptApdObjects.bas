@@ -13,23 +13,23 @@ Option Compare Database
 ' Server, not the ADP file, and are intentionally NOT covered here.)
 '
 ' EXPORT USAGE:
-'   Call ExportAllScriptableObjects()                                          ' Default: <ADP-Pfad>\adp_dump\, kein Log
-'   Call ExportAllScriptableObjects("C:\Export\MyProject\")                    ' eigener Pfad, kein Log
-'   Call ExportAllScriptableObjects("C:\Export\MyProject\", WithLogFile:=True) ' eigener Pfad, mit Log
-'   Call ExportAllScriptableObjects WithLogFile:=True                         ' Default-Pfad, mit Log
+'   Call ExportAllScriptableObjects()                                          ' default: <ADP path>\adp_dump\, no log
+'   Call ExportAllScriptableObjects("C:\Export\MyProject\")                    ' custom path, no log
+'   Call ExportAllScriptableObjects("C:\Export\MyProject\", WithLogFile:=True) ' custom path, with log
+'   Call ExportAllScriptableObjects WithLogFile:=True                         ' default path, with log
 '   -- or run the interactive wrapper --
 '   Call RunExportAllScriptableObjects
 '
-' Hinweis: Vor jedem Lauf werden nur die Objekt-Unterordner (Forms, Reports,
-' Macros, Modules) geleert. Sonstiger Inhalt des Zielverzeichnisses
-' (z.B. Logdateien, .git, .svn) bleibt unangetastet.
+' Note: Before each run, only the object subfolders (Forms, Reports, Macros,
+' Modules) are cleared. Any other content in the target directory
+' (e.g. log files, .git, .svn) is left untouched.
 '
 ' IMPORT USAGE:
-'   Call ImportScriptableObject(acForm, "C:\Export\Forms\frmCustomer.txt")
-'   Call ImportScriptableObject(acForm, "C:\Export\Forms\frmCustomer.txt", "frmCopy")
+'   Call ImportScriptableObject(acForm, "C:\Export\Forms\frmCustomer.frm")
+'   Call ImportScriptableObject(acForm, "C:\Export\Forms\frmCustomer.frm", "frmCopy")
 '===============================================================================
 
-Public Const MODULE_VERSION As String = "1.5.20260907"
+Public Const MODULE_VERSION As String = "1.7.20260907"
 
 Private mLogFile As Integer
 Private mLogPath As String
@@ -47,8 +47,8 @@ Private mWithLogFile As Boolean
 Public Sub RunExportAllScriptableObjects()
 
     Dim sFolder As String
-    sFolder = InputBox("Pfad zum Export-Verzeichnis (leer lassen für Standard: " & _
-                        "<ADP-Pfad>\adp_dump\):", _
+    sFolder = InputBox("Path to the export directory (leave empty for default: " & _
+                        "<ADP path>\adp_dump\):", _
                         "Export ADP Scriptable Objects", "")
 
     ExportAllScriptableObjects sFolder
@@ -85,8 +85,8 @@ Public Sub ExportAllScriptableObjects(Optional ByVal ExportFolder As String = ""
     sMacrosDir = sBase & "Macros\"
     sModulesDir = sBase & "Modules\"
 
-    ' Vor jedem Lauf nur die jeweiligen Objekt-Unterordner leeren
-    ' (restlicher Inhalt von sBase, z.B. Logdateien, .git, .svn, bleibt unangetastet)
+    ' Before each run, only clear the respective object subfolders
+    ' (remaining content of sBase, e.g. log files, .git, .svn, is left untouched)
     EnsureFolder sFormsDir
     ClearFolderRecursively sFormsDir
 
@@ -99,7 +99,7 @@ Public Sub ExportAllScriptableObjects(Optional ByVal ExportFolder As String = ""
     EnsureFolder sModulesDir
     ClearFolderRecursively sModulesDir
 
-    ' Logdatei nur öffnen, wenn gewünscht
+    ' Only open the log file if requested
     If mWithLogFile Then
         mLogPath = sBase & "ExportLog_" & Format(Now, "yyyymmdd_hhnnss") & ".txt"
         mLogFile = FreeFile
@@ -152,8 +152,18 @@ Private Sub ExportAccessObjects(ByVal ObjType As AcObjectType, _
 
     LogLine ">>> Exporting " & Label & " ..."
 
-    sExt = ".txt"
-    If ObjType = acModule Then sExt = ".bas"
+    Select Case ObjType
+        Case acForm
+            sExt = ".frm"
+        Case acReport
+            sExt = ".rpt"
+        Case acMacro
+            sExt = ".mac"
+        Case acModule
+            sExt = ".bas"
+        Case Else
+            sExt = ".txt"
+    End Select
 
     Select Case ObjType
         Case acForm
@@ -243,8 +253,8 @@ Private Sub EnsureFolder(ByVal sPath As String)
 End Sub
 
 '--------------------------------------------------------------
-' Löscht rekursiv alle Dateien und Unterordner in sPath.
-' sPath selbst bleibt bestehen.
+' Recursively deletes all files and subfolders in sPath.
+' sPath itself is kept.
 '--------------------------------------------------------------
 Private Sub ClearFolderRecursively(ByVal sPath As String)
 
@@ -254,18 +264,18 @@ Private Sub ClearFolderRecursively(ByVal sPath As String)
     Dim itm As Variant
 
     If Right$(sPath, 1) <> "\" Then sPath = sPath & "\"
-    If Len(Dir(sPath, vbDirectory)) = 0 Then Exit Sub ' Ordner existiert nicht
+    If Len(Dir(sPath, vbDirectory)) = 0 Then Exit Sub ' folder does not exist
 
     Set colFiles = New Collection
     Set colDirs = New Collection
 
-    ' Erst vollständig einlesen (Dir() hat nur einen aktiven Suchzustand,
-    ' rekursive Aufrufe würden die laufende Schleife sonst stören)
+    ' Read everything first (Dir() only has a single active search state,
+    ' so recursive calls would otherwise disturb the running loop)
     sEntry = Dir(sPath, vbNormal Or vbHidden Or vbSystem Or vbDirectory)
     Do While Len(sEntry) > 0
         If sEntry <> "." And sEntry <> ".." Then
             If (GetAttr(sPath & sEntry) And vbDirectory) = vbDirectory Then
-                ' .git- und .svn-Ordner (Groß-/Kleinschreibung ignorieren) nie löschen
+                ' Never delete .git or .svn folders (case-insensitive)
                 If LCase$(sEntry) <> ".git" And LCase$(sEntry) <> ".svn" Then
                     colDirs.Add sEntry
                 End If
