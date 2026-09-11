@@ -1,9 +1,9 @@
-Attribute VB_Name = "modScriptApdObjects"
+Attribute VB_Name = "modScriptAdpObjects"
 Option Explicit
 Option Compare Database
 
 '===============================================================================
-' modScriptApdObjects
+' modScriptAdpObjects
 '
 ' Export/import of client-side scriptable objects (Forms, Reports, Macros,
 ' Modules) for an Access 2003 ADP, using Application.SaveAsText /
@@ -29,7 +29,7 @@ Option Compare Database
 '   Call ImportScriptableObject(acForm, "C:\Export\Forms\frmCustomer.frm", "frmCopy")
 '===============================================================================
 
-Public Const MODULE_VERSION As String = "1.7.20260907"
+Public Const MODULE_VERSION As String = "1.8.20260907"
 
 Private mLogFile As Integer
 Private mLogPath As String

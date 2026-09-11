@@ -1,4 +1,4 @@
-# modScriptApdObjects
+# modScriptAdpObjects
 
 VBA module for Access 2003 ADP projects (Access Data Project). Exports all
 client-side "scriptable" objects (Forms, Reports, Macros, Modules) as text
@@ -24,7 +24,7 @@ this module.
 
 ## Installation
 
-1. Import the module `modScriptApdObjects.bas` into the ADP
+1. Import the module `modScriptAdpObjects.bas` into the ADP
    (VBA editor → File → Import File…).
 2. Done — no additional references required.
 
